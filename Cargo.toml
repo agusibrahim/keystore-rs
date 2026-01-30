@@ -7,7 +7,7 @@ description = "Java KeyStore (JKS) and PKCS12 encoder/decoder for Rust"
 license = "MIT"
 repository = "https://github.com/agusibrahim/jks"
 homepage = "https://github.com/agusibrahim/jks"
-keywords = ["jks", "java", "keystore", "certificate", "pkcs8", "pkcs12", "p12"]
+keywords = ["jks", "java", "keystore", "pkcs12", "certificate"]
 categories = ["cryptography"]
 
 [lib]
