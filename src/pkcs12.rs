@@ -17,12 +17,18 @@ pub fn is_pkcs12_data(data: &[u8]) -> bool {
     !data.is_empty() && data[0] == PKCS12_MAGIC
 }
 
-/// Try to extract alias from certificate (CN or friendly name)
+/// Try to extract alias from certificate (friendly name or CN)
 fn extract_alias_from_cert(cert: &openssl::x509::X509) -> String {
-    // Try to get friendly name first (if available)
-    // Note: OpenSSL's Rust bindings don't expose friendly_name directly
+    // First try: get the friendly name from certificate (PKCS12 alias)
+    if let Some(alias_bytes) = cert.alias() {
+        if let Ok(alias_str) = std::string::String::from_utf8(alias_bytes.to_vec()) {
+            if !alias_str.is_empty() {
+                return alias_str;
+            }
+        }
+    }
 
-    // Fall back to subject CN (Common Name)
+    // Second try: Fall back to subject CN (Common Name)
     let name = cert.subject_name();
     let mut cn_entry = name.entries_by_nid(openssl::nid::Nid::COMMONNAME);
     if let Some(cn) = cn_entry.next() {
