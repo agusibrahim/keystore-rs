@@ -35,7 +35,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-jks = "0.2.2"
+jks = "0.2.3"
 ```
 
 ## Quick Start
