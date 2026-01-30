@@ -1,0 +1,53 @@
+[package]
+name = "jks"
+version = "0.1.0"
+edition = "2021"
+authors = ["agusibrahim <hi@agusibrahim.com>"]
+description = "Java KeyStore (JKS) encoder/decoder for Rust"
+license = "MIT"
+repository = "https://github.com/agusibrahim/jks"
+homepage = "https://github.com/agusibrahim/jks"
+keywords = ["jks", "java", "keystore", "certificate", "pkcs8"]
+categories = ["cryptography"]
+
+[lib]
+name = "keystore_rs"
+path = "src/lib.rs"
+
+[dependencies]
+sha1 = "0.10"
+asn1-rs = "0.5"
+thiserror = "1.0"
+rand = "0.8"
+
+[dev-dependencies]
+rsa = "0.9"
+pkcs8 = "0.10"
+x509-cert = "0.2"
+der = "0.7"
+pem = "3.0"
+rand = "0.8"
+
+[[example]]
+name = "pem"
+path = "examples/pem.rs"
+
+[[example]]
+name = "keypass"
+path = "examples/keypass.rs"
+
+[[example]]
+name = "truststore"
+path = "examples/truststore.rs"
+
+[[example]]
+name = "compare"
+path = "examples/compare.rs"
+
+[[example]]
+name = "jks_to_pem"
+path = "examples/jks_to_pem.rs"
+
+[[example]]
+name = "jks_to_pem_bundle"
+path = "examples/jks_to_pem_bundle.rs"
