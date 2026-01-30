@@ -274,7 +274,7 @@ fn encode_asn1_private_key_info(encrypted_data: &[u8]) -> Result<Vec<u8>> {
     Ok(result)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "rand"))]
 mod tests {
     use super::*;
     use crate::common::FixedRandom;

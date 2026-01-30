@@ -3,7 +3,8 @@
 
 //! Common types and constants for keystore operations
 
-/// Magic number for JKS files
+#[cfg(feature = "rand")]
+use rand::RngCore;
 pub const MAGIC: u32 = 0xfeedfeed;
 
 /// Version 1 of JKS format
@@ -90,24 +91,41 @@ pub trait RandomReader: Send + Sync {
 }
 
 /// System random reader using rand crate
+#[cfg(feature = "rand")]
 #[derive(Debug, Clone, Copy)]
 pub struct SystemRandom;
 
+#[cfg(feature = "rand")]
 impl RandomReader for SystemRandom {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<()> {
-        use rand::RngCore;
         let mut rng = rand::thread_rng();
         rng.fill_bytes(buf);
         Ok(())
     }
 }
 
+/// Default RNG implementation when rand feature is not enabled
+#[cfg(not(feature = "rand"))]
+pub struct SystemRandom;
+
+#[cfg(not(feature = "rand"))]
+impl RandomReader for SystemRandom {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<()> {
+        // Simple fallback: fill with zeros (NOT secure for production!)
+    // In WASM without rand, user should provide a custom RNG
+        for b in buf.iter_mut() {
+            *b = 0;
+        }
+        Ok(())
+    }
+}
+
 /// Fixed reader for testing (returns all ones)
-#[cfg(test)]
+#[cfg(all(test, feature = "rand"))]
 #[derive(Debug, Clone, Copy)]
 pub struct FixedRandom(pub u8);
 
-#[cfg(test)]
+#[cfg(all(test, feature = "rand"))]
 impl RandomReader for FixedRandom {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<()> {
         buf.fill(self.0);

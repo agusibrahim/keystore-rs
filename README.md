@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Crates.io](https://img.shields.io/crates/v/jks)](https://crates.io/crates/jks)
 
-Java KeyStore (JKS) encoder/decoder for Rust.
+Java KeyStore (JKS) encoder/decoder for Rust. Supports WebAssembly (WASM).
 
 ## About
 
@@ -432,9 +432,50 @@ cargo test --lib
 cargo run --example pem
 ```
 
-## Compatibility
+## WebAssembly (WASM) Support
 
-This library is compatible with:
+This library can be compiled to WebAssembly for use in browser environments or Node.js-WASM.
+
+### Building for WASM
+
+```bash
+# Build without default features (rand uses getrandom which isn't WASM-compatible)
+cargo build --target wasm32-unknown-unknown --no-default-features
+
+# In your Cargo.toml:
+[dependencies]
+jks = { version = "0.1", default-features = false }
+```
+
+### Providing a Custom RNG for WASM
+
+Since the default RNG isn't available in WASM, you need to provide your own:
+
+```rust
+use jks::{KeyStore, KeyStoreOptions, common::RandomReader};
+use std::io::{self, Write};
+
+struct BrowserRng;
+
+impl RandomReader for BrowserRng {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<()> {
+        // Use browser's crypto API or provide your own implementation
+        // In browsers, you can use web-sys or wasm-bindgen
+        Ok(())
+    }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let options = KeyStoreOptions {
+        rng: Box::new(BrowserRng),
+        ..Default::default()
+    };
+    let mut ks = KeyStore::with_options(options);
+    // ...
+}
+```
+
+### Compatibility
 
 - ✅ Java KeyStore (JKS) format
 - ✅ Java `keytool` generated keystores
