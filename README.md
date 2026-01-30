@@ -8,7 +8,7 @@ Java KeyStore (JKS) and PKCS12 encoder/decoder for Rust. Supports WebAssembly (W
 
 ## About
 
-`jks` is a Rust library for reading and writing Java KeyStore (JKS) and PKCS12 files. It provides compatibility with Java's `keytool` and Android keystores, and can be used to:
+`jks` is a pure Rust library for reading and writing Java KeyStore (JKS) and PKCS12 files. It provides compatibility with Java's `keytool` and Android keystores, and can be used to:
 
 - Read JKS files (keystores, truststores)
 - Read PKCS12 files (Android `.keystore`, `.p12`, `.pfx`)
@@ -21,7 +21,7 @@ Java KeyStore (JKS) and PKCS12 encoder/decoder for Rust. Supports WebAssembly (W
 ## Features
 
 - ✅ **Read JKS files** - Load existing Java keystores
-- ✅ **Read PKCS12 files** - Load Android keystores, `.p12`, `.pfx` files (with `openssl` feature)
+- ✅ **Read PKCS12 files** - Load Android keystores, `.p12`, `.pfx` files (pure Rust, no OpenSSL)
 - ✅ **Auto-detect format** - Automatically detects JKS vs PKCS12 format
 - ✅ **Write JKS files** - Create new keystores compatible with Java
 - ✅ **Password-based encryption** - Private keys encrypted using password (XOR + SHA-1)
@@ -30,6 +30,7 @@ Java KeyStore (JKS) and PKCS12 encoder/decoder for Rust. Supports WebAssembly (W
 - ✅ **Case-insensitive aliases** - Alias matching is case-insensitive by default
 - ✅ **Ordered aliases** - Optional alphabetical sorting of aliases
 - ✅ **Custom password validation** - Configurable minimum password length
+- ✅ **WASM Support** - Full JKS and PKCS12 support in WebAssembly
 
 ## Installation
 
@@ -37,21 +38,29 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-jks = "0.3.2"
+jks = "0.3.3"
 ```
 
 ### Features
 
-- **default** - Includes `rand` and `openssl` (PKCS12 support)
+- **default** - Includes `rand` and `pkcs12` (PKCS12 support)
 - **rand** - Enable random number generation for JKS encryption
-- **openssl** - Enable PKCS12 support (for Android keystores)
-- **wasm** - Build for WebAssembly (without `rand` or `openssl`)
+- **pkcs12** - Enable PKCS12 support (for Android keystores) - uses pure Rust `p12-keystore`
+- **wasm** - Build for WebAssembly (enables `getrandom/js` for WASM environments)
 
 To disable PKCS12 support (reduce dependencies):
 
 ```toml
 [dependencies]
 jks = { version = "0.3", default-features = false, features = ["rand"] }
+```
+
+For WASM builds:
+
+```toml
+[dependencies]
+jks = { version = "0.3", default-features = false, features = ["pkcs12"] }
+getrandom = { version = "0.3", features = ["wasm_js"] }
 ```
 
 ## Quick Start
@@ -175,10 +184,10 @@ let mut file = File::open("my-release-key.keystore")?;
 ks.load_auto_detect(&mut file, b"password")?;
 
 // Get private key entry (already decrypted for PKCS12)
-let alias = "key_0"; // PKCS12 entries use generic aliases
-if ks.is_private_key_entry(alias) {
+let alias = ks.aliases().first().unwrap().clone();
+if ks.is_private_key_entry(&alias) {
     // For PKCS12, use get_raw_private_key_entry() since keys are already decrypted
-    let entry = ks.get_raw_private_key_entry(alias)?;
+    let entry = ks.get_raw_private_key_entry(&alias)?;
 
     // Access certificate chain
     for cert in &entry.certificate_chain {
@@ -187,7 +196,7 @@ if ks.is_private_key_entry(alias) {
 }
 ```
 
-**Note:** PKCS12 files (like Android keystores) are supported via the `openssl` feature. The private keys from PKCS12 are already decrypted, so use `get_raw_private_key_entry()` instead of `get_private_key_entry()`.
+**Note:** PKCS12 files (like Android keystores) are supported via the pure Rust `p12-keystore` library. The private keys from PKCS12 are already decrypted, so use `get_raw_private_key_entry()` instead of `get_private_key_entry()`.
 
 #### Private Key Entries
 
@@ -489,15 +498,28 @@ cargo run --example pem
 
 ## WebAssembly (WASM) Support
 
-This library can be compiled to WebAssembly for use in browser environments or Node.js-WASM. Runtime tested and verified working.
+This library fully supports WebAssembly for use in browser environments or Node.js. Both JKS and PKCS12 formats are supported in WASM.
 
 ### Building for WASM
 
-```bash
-# Build the library for WASM (without rand feature)
-cargo build --target wasm32-unknown-unknown --lib --no-default-features
+Using wasm-pack (recommended):
 
-# Output: target/wasm32-unknown-unknown/debug/jks.wasm
+```bash
+# Install wasm-pack
+cargo install wasm-pack
+
+# Build for Node.js
+wasm-pack build --target nodejs
+
+# Build for web browsers
+wasm-pack build --target web
+```
+
+Or using cargo directly:
+
+```bash
+# Build the library for WASM
+cargo build --target wasm32-unknown-unknown --lib --no-default-features --features pkcs12
 ```
 
 ### Using in Your Project
@@ -506,12 +528,14 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-jks = { version = "0.2", default-features = false }
+jks = { version = "0.3", default-features = false, features = ["pkcs12"] }
+wasm-bindgen = "0.2"
+getrandom = { version = "0.3", features = ["wasm_js"] }
 ```
 
 ### Providing a Custom RNG for WASM
 
-Since the default RNG isn't available in WASM, you need to provide your own using `KeyStoreOptions`:
+For JKS write operations, you need to provide a custom RNG since the default RNG isn't available in WASM:
 
 ```rust
 use jks::{KeyStore, KeyStoreOptions, common::RandomReader};
@@ -543,33 +567,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 The library has been verified working in WebAssembly runtime environment:
 
 ```bash
-# Run the WASM runtime tests
-cargo build --target wasm32-unknown-unknown \
-    --manifest-path=tests/wasm/Cargo.toml --release
+# Build the WASM test module
+cd tests/wasm
+wasm-pack build --target nodejs
 
-# Test with Node.js
-node tests/wasm/test.js
+# Run tests with Node.js
+node test.js
 ```
 
 **Test Results (verified):**
-- ✅ `test_create_trusted_cert()` - PASSED
-- ✅ `test_alias_count()` - PASSED
-- ✅ `test_all()` - PASSED
+- ✅ Basic operations - PASSED
+- ✅ Load JKS file - PASSED
+- ✅ Load PKCS12 (.keystore) file - PASSED
+- ✅ Get PKCS12 private key info - PASSED
+- ✅ Auto-detect JKS format - PASSED
+- ✅ Auto-detect PKCS12 format - PASSED
+- ✅ Get JKS private key info (with decryption) - PASSED
 
-WASM binary size: ~56 KB (release build)
+**All 7 tests PASSED** for both JKS and PKCS12 in WASM!
 
 ### Compatibility
 
 - ✅ Java KeyStore (JKS) format
+- ✅ PKCS12 format (.p12, .pfx, .keystore)
 - ✅ Java `keytool` generated keystores
+- ✅ Android keystores
 - ✅ Java cacerts truststore
 - ✅ OpenSSL generated certificates
 - ✅ PKCS#8 private keys
+- ✅ WebAssembly (WASM)
 
 ## Requirements
 
 - Rust 1.70 or later
-- No external C dependencies
+- **No external C dependencies** - Pure Rust implementation
 
 ## License
 
@@ -580,6 +611,8 @@ MIT License - see [LICENSE](LICENSE) for details.
 This library is a Rust port of the excellent Go implementation:
 
 [keystore-go](https://github.com/pavlo-v-chernykh/keystore-go) by Pavlo Chernykh
+
+PKCS12 support is powered by [p12-keystore](https://github.com/ancwrd1/p12-keystore) by Dmitry Pankratov.
 
 ## Author
 

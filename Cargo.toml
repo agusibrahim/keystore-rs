@@ -21,12 +21,12 @@ asn1-rs = "0.5"
 thiserror = "1.0"
 rand = { version = "0.8", optional = true }
 getrandom = { version = "0.2", optional = true }
-p12-keystore = { path = "p12-keystore-main", optional = true }
+p12-keystore = { version = "0.3.0-rc1", optional = true }
 
 [features]
 default = ["rand", "pkcs12"]
 pkcs12 = ["dep:p12-keystore"]
-wasm = ["getrandom/js", "p12-keystore?/wasm"]
+wasm = ["getrandom/js"]
 
 [dev-dependencies]
 rsa = "0.9"
