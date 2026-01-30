@@ -40,6 +40,9 @@ pub mod decoder;
 pub mod encoder;
 pub mod keyprotector;
 
+#[cfg(feature = "openssl")]
+pub mod pkcs12;
+
 pub use common::{
     zeroing, Certificate, KeyStoreOptions, PrivateKeyEntry, TrustedCertificateEntry,
 };
@@ -224,6 +227,48 @@ impl KeyStore {
         Ok(())
     }
 
+    /// Auto-detect format and load keystore from reader
+    ///
+    /// This method automatically detects whether the file is JKS or PKCS12 format
+    /// and loads it accordingly. Supports:
+    /// - JKS format (`.jks` files) - magic: 0xFEEDFEED
+    /// - PKCS12 format (`.keystore`, `.p12`, `.pfx` files) - starts with 0x30
+    ///
+    /// It is strongly recommended to zero out the password after use.
+    pub fn load_auto_detect<R: Read>(&mut self, mut reader: R, password: &[u8]) -> Result<()> {
+        // Peek at the first bytes to detect format
+        let mut buffer = Vec::new();
+        reader.read_to_end(&mut buffer)?;
+
+        if buffer.is_empty() {
+            return Err(KeyStoreError::Other("Empty file".to_string()));
+        }
+
+        // Check for JKS magic (0xFEEDFEED in big-endian)
+        if buffer.len() >= 4 {
+            let magic = u32::from_be_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
+            if magic == common::MAGIC {
+                // JKS format - use normal load
+                return self.load(buffer.as_slice(), password);
+            }
+        }
+
+        // Check for PKCS12 format (ASN.1 SEQUENCE tag = 0x30)
+        #[cfg(feature = "openssl")]
+        if buffer[0] == 0x30 {
+            return self.load_pkcs12(buffer.as_slice(), password);
+        }
+
+        #[cfg(not(feature = "openssl"))]
+        if buffer[0] == 0x30 {
+            return Err(KeyStoreError::Other(
+                "PKCS12 format detected but feature not enabled. Use: cargo build --features openssl".to_string(),
+            ));
+        }
+
+        Err(KeyStoreError::InvalidMagic)
+    }
+
     /// Adds a PrivateKeyEntry encrypted with the password
     ///
     /// It is strongly recommended to zero out the password after use.
@@ -274,6 +319,22 @@ impl KeyStore {
                     ..pke.clone()
                 })
             }
+            Entry::TrustedCertificate(_) => Err(KeyStoreError::WrongEntryType),
+        }
+    }
+
+    /// Returns a PrivateKeyEntry without decryption (for already-decrypted keys like PKCS12)
+    ///
+    /// This method returns the private key entry as-is, without attempting to decrypt it.
+    /// Useful for keystores loaded from PKCS12 format where keys are already decrypted.
+    pub fn get_raw_private_key_entry(&self, alias: &str) -> Result<PrivateKeyEntry> {
+        let entry = self
+            .entries
+            .get(&self.convert_alias(alias))
+            .ok_or(KeyStoreError::EntryNotFound)?;
+
+        match entry {
+            Entry::PrivateKey(pke) => Ok(pke.clone()),
             Entry::TrustedCertificate(_) => Err(KeyStoreError::WrongEntryType),
         }
     }

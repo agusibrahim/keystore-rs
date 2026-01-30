@@ -4,22 +4,25 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Crates.io](https://img.shields.io/crates/v/jks)](https://crates.io/crates/jks)
 
-Java KeyStore (JKS) encoder/decoder for Rust. Supports WebAssembly (WASM).
+Java KeyStore (JKS) and PKCS12 encoder/decoder for Rust. Supports WebAssembly (WASM).
 
 ## About
 
-`jks` is a pure Rust library for reading and writing Java KeyStore (JKS) files. It provides compatibility with Java's `keytool` and can be used to:
+`jks` is a Rust library for reading and writing Java KeyStore (JKS) and PKCS12 files. It provides compatibility with Java's `keytool` and Android keystores, and can be used to:
 
-- Read existing JKS files (keystores, truststores)
+- Read JKS files (keystores, truststores)
+- Read PKCS12 files (Android `.keystore`, `.p12`, `.pfx`)
 - Create new JKS files with private keys and certificates
-- Extract private keys and certificates from JKS files
-- Convert JKS to PEM format and vice versa
+- Extract private keys and certificates from keystores
+- Convert keystores to PEM format and vice versa
 
-**Note:** JKS assumes that private keys are PKCS#8 encoded.
+**Note:** Private keys are assumed to be PKCS#8 encoded.
 
 ## Features
 
 - ✅ **Read JKS files** - Load existing Java keystores
+- ✅ **Read PKCS12 files** - Load Android keystores, `.p12`, `.pfx` files (with `openssl` feature)
+- ✅ **Auto-detect format** - Automatically detects JKS vs PKCS12 format
 - ✅ **Write JKS files** - Create new keystores compatible with Java
 - ✅ **Password-based encryption** - Private keys encrypted using password (XOR + SHA-1)
 - ✅ **Private Key entries** - Support for private keys with certificate chains
@@ -27,7 +30,6 @@ Java KeyStore (JKS) encoder/decoder for Rust. Supports WebAssembly (WASM).
 - ✅ **Case-insensitive aliases** - Alias matching is case-insensitive by default
 - ✅ **Ordered aliases** - Optional alphabetical sorting of aliases
 - ✅ **Custom password validation** - Configurable minimum password length
-- ✅ **No external dependencies** - Pure Rust implementation
 
 ## Installation
 
@@ -35,7 +37,21 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-jks = "0.2.3"
+jks = "0.3"
+```
+
+### Features
+
+- **default** - Includes `rand` and `openssl` (PKCS12 support)
+- **rand** - Enable random number generation for JKS encryption
+- **openssl** - Enable PKCS12 support (for Android keystores)
+- **wasm** - Build for WebAssembly (without `rand` or `openssl`)
+
+To disable PKCS12 support (reduce dependencies):
+
+```toml
+[dependencies]
+jks = { version = "0.3", default-features = false, features = ["rand"] }
 ```
 
 ## Quick Start
@@ -125,14 +141,53 @@ use std::fs::File;
 
 let mut ks = KeyStore::new();
 
-// Load from file
+// Load from file (JKS format)
 let mut file = File::open("keystore.jks")?;
 ks.load(&mut file, b"password")?;
+
+// Auto-detect format (JKS or PKCS12)
+let mut file = File::open("keystore.jks")?;
+ks.load_auto_detect(&mut file, b"password")?;
+
+// Load PKCS12 file (Android .keystore, .p12, .pfx)
+let mut file = File::open("android.keystore")?;
+ks.load_pkcs12(&mut file, b"password")?;
 
 // Save to file
 let mut file = File::create("keystore.jks")?;
 ks.store(&mut file, b"password")?;
 ```
+
+#### PKCS12 Support (Android Keystores)
+
+```rust
+use jks::KeyStore;
+use std::fs::File;
+
+let mut ks = KeyStore::new();
+
+// Load Android keystore (PKCS12 format)
+let mut file = File::open("my-release-key.keystore")?;
+ks.load_pkcs12(&mut file, b"password")?;
+
+// Or use auto-detect (works for both JKS and PKCS12)
+let mut file = File::open("my-release-key.keystore")?;
+ks.load_auto_detect(&mut file, b"password")?;
+
+// Get private key entry (already decrypted for PKCS12)
+let alias = "key_0"; // PKCS12 entries use generic aliases
+if ks.is_private_key_entry(alias) {
+    // For PKCS12, use get_raw_private_key_entry() since keys are already decrypted
+    let entry = ks.get_raw_private_key_entry(alias)?;
+
+    // Access certificate chain
+    for cert in &entry.certificate_chain {
+        println!("Certificate: {} bytes", cert.content.len());
+    }
+}
+```
+
+**Note:** PKCS12 files (like Android keystores) are supported via the `openssl` feature. The private keys from PKCS12 are already decrypted, so use `get_raw_private_key_entry()` instead of `get_private_key_entry()`.
 
 #### Private Key Entries
 

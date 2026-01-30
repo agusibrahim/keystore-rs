@@ -37,7 +37,7 @@ use std::process;
 fn read_keystore(path: &str, password: &[u8]) -> Result<KeyStore, Box<dyn std::error::Error>> {
     let mut file = File::open(path)?;
     let mut ks = KeyStore::new();
-    ks.load(&mut file, password)?;
+    ks.load_auto_detect(&mut file, password)?;
     Ok(ks)
 }
 
@@ -137,13 +137,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if ks.is_private_key_entry(alias) {
         println!("Found PrivateKeyEntry for '{}'", alias);
 
+        // Try to decrypt first (for JKS format), fall back to raw (for PKCS12 format)
         let pke = match ks.get_private_key_entry(alias, &password) {
-            Ok(entry) => entry,
-            Err(e) => {
-                eprintln!("Error decrypting private key: {}", e);
-                eprintln!("Make sure the key password matches the keystore password");
-                zeroing(&mut password);
-                process::exit(1);
+            Ok(entry) => {
+                println!("  Key decrypted successfully (JKS format)");
+                entry
+            }
+            Err(_) => {
+                println!("  Trying raw key extraction (PKCS12 format)...");
+                match ks.get_raw_private_key_entry(alias) {
+                    Ok(entry) => {
+                        println!("  Raw key extracted successfully");
+                        entry
+                    }
+                    Err(e) => {
+                        eprintln!("Error getting private key: {}", e);
+                        eprintln!("Make sure the key password matches the keystore password");
+                        zeroing(&mut password);
+                        process::exit(1);
+                    }
+                }
             }
         };
 

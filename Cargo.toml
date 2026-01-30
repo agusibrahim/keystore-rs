@@ -1,13 +1,13 @@
 [package]
 name = "jks"
-version = "0.2.3"
+version = "0.3.0"
 edition = "2021"
 authors = ["agusibrahim <hi@agusibrahim.com>"]
-description = "Java KeyStore (JKS) encoder/decoder for Rust"
+description = "Java KeyStore (JKS) and PKCS12 encoder/decoder for Rust"
 license = "MIT"
 repository = "https://github.com/agusibrahim/jks"
 homepage = "https://github.com/agusibrahim/jks"
-keywords = ["jks", "java", "keystore", "certificate", "pkcs8"]
+keywords = ["jks", "java", "keystore", "certificate", "pkcs8", "pkcs12", "p12"]
 categories = ["cryptography"]
 
 [lib]
@@ -21,9 +21,11 @@ asn1-rs = "0.5"
 thiserror = "1.0"
 rand = { version = "0.8", optional = true }
 getrandom = { version = "0.2", optional = true }
+openssl = { version = "0.10", optional = true }
 
 [features]
-default = ["rand"]
+default = ["rand", "openssl"]
+openssl = ["dep:openssl"]
 wasm = ["getrandom/js"]
 
 [dev-dependencies]
