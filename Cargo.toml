@@ -1,6 +1,6 @@
 [package]
 name = "jks"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["agusibrahim <hi@agusibrahim.com>"]
 description = "Java KeyStore (JKS) encoder/decoder for Rust"
