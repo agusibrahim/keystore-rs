@@ -17,6 +17,28 @@ pub fn is_pkcs12_data(data: &[u8]) -> bool {
     !data.is_empty() && data[0] == PKCS12_MAGIC
 }
 
+/// Try to extract alias from certificate (CN or friendly name)
+fn extract_alias_from_cert(cert: &openssl::x509::X509) -> String {
+    // Try to get friendly name first (if available)
+    // Note: OpenSSL's Rust bindings don't expose friendly_name directly
+
+    // Fall back to subject CN (Common Name)
+    let name = cert.subject_name();
+    let mut cn_entry = name.entries_by_nid(openssl::nid::Nid::COMMONNAME);
+    if let Some(cn) = cn_entry.next() {
+        let cn_data = cn.data();
+        let cn_bytes = cn_data.as_slice();
+        if let Ok(cn_str) = std::string::String::from_utf8(cn_bytes.to_vec()) {
+            if !cn_str.is_empty() {
+                return cn_str;
+            }
+        }
+    }
+
+    // Final fallback
+    "key_0".to_string()
+}
+
 impl KeyStore {
     /// Load a PKCS12 keystore from reader
     ///
@@ -56,13 +78,19 @@ impl KeyStore {
                 // Build certificate chain: cert (end-entity) + ca (intermediate + root)
                 let mut cert_chain = Vec::new();
 
-                // Add end-entity certificate if present
-                if let Some(cert) = parsed.cert {
+                // Extract alias from certificate
+                let alias = if let Some(cert) = &parsed.cert {
+                    // Store the certificate in chain
                     cert_chain.push(Certificate {
                         cert_type: "X509".to_string(),
                         content: cert.to_der().unwrap_or_default(),
                     });
-                }
+
+                    // Try to extract alias from certificate
+                    extract_alias_from_cert(cert)
+                } else {
+                    "key_0".to_string()
+                };
 
                 // Add CA certificates if present
                 if let Some(ca_stack) = parsed.ca {
@@ -80,7 +108,7 @@ impl KeyStore {
                     certificate_chain: cert_chain,
                 };
 
-                self.entries.insert("key_0".to_string(), Entry::PrivateKey(entry));
+                self.entries.insert(self.convert_alias(&alias), Entry::PrivateKey(entry));
             }
 
             Ok(())
