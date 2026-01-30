@@ -1,6 +1,6 @@
 [package]
 name = "jks"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2021"
 authors = ["agusibrahim <hi@agusibrahim.com>"]
 description = "Java KeyStore (JKS) and PKCS12 encoder/decoder for Rust"
@@ -21,12 +21,12 @@ asn1-rs = "0.5"
 thiserror = "1.0"
 rand = { version = "0.8", optional = true }
 getrandom = { version = "0.2", optional = true }
-openssl = { version = "0.10", optional = true }
+p12-keystore = { path = "p12-keystore-main", optional = true }
 
 [features]
-default = ["rand", "openssl"]
-openssl = ["dep:openssl"]
-wasm = ["getrandom/js"]
+default = ["rand", "pkcs12"]
+pkcs12 = ["dep:p12-keystore"]
+wasm = ["getrandom/js", "p12-keystore?/wasm"]
 
 [dev-dependencies]
 rsa = "0.9"

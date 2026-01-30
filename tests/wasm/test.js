@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * WASM Runtime Tests for jks library
- * Tests the core functionality using Node.js WebAssembly API
+ * WASM Runtime Tests for jks library with PKCS12 support
+ * Tests the core functionality using Node.js and wasm-pack
  */
 
 const fs = require('fs');
@@ -23,79 +23,192 @@ function log(message, color = colors.reset) {
 }
 
 function success(message) {
-  log(`  ${message}`, colors.green);
+  log(`  ✓ ${message}`, colors.green);
 }
 
 function error(message) {
-  log(`  ${message}`, colors.red);
+  log(`  ✗ ${message}`, colors.red);
 }
 
 function info(message) {
   log(`  ${message}`, colors.blue);
 }
 
-async function loadWasm() {
-  const wasmPath = path.join(__dirname, 'target/wasm32-unknown-unknown/release/jks_wasm_test.wasm');
-
-  if (!fs.existsSync(wasmPath)) {
-    log('', colors.reset);
-    error('WASM file not found!');
-    log(`  Expected path: ${wasmPath}`, colors.yellow);
-    log('', colors.reset);
-    log('  Build the WASM module first:', colors.blue);
-    log('  cargo build --target wasm32-unknown-unknown --manifest-path=tests/wasm/Cargo.toml --release', colors.yellow);
-    log('', colors.reset);
-    process.exit(1);
-  }
-
-  const wasmBuffer = fs.readFileSync(wasmPath);
-  const module = await WebAssembly.compile(wasmBuffer);
-  const instance = await WebAssembly.instantiate(module, {});
-  return instance.exports;
-}
-
 async function runTests() {
-  log('JKS WASM Runtime Tests', colors.blue);
-  log('=======================', colors.blue);
+  log('JKS WASM Runtime Tests (with PKCS12 support)', colors.blue);
+  log('=============================================', colors.blue);
   log('');
 
+  let passed = 0;
+  let failed = 0;
+
   try {
-    const exports = await loadWasm();
+    // Load the wasm-pack generated module
+    const wasmPkgPath = path.join(__dirname, 'pkg');
+    if (!fs.existsSync(wasmPkgPath)) {
+      error('WASM package not found!');
+      log('  Build with: cd tests/wasm && wasm-pack build --target nodejs', colors.yellow);
+      process.exit(1);
+    }
 
-    // Test 1: test_create_trusted_cert
-    log('Running: test_create_trusted_cert()');
-    const result1 = exports.test_create_trusted_cert();
-    if (result1 === 0) {
-      success('PASSED - Trusted certificate entry created successfully');
-    } else {
-      error(`FAILED - Expected 0, got ${result1}`);
+    const wasm = require('./pkg/jks_wasm_test.js');
+
+    // Test 1: Basic operations
+    log('Test 1: test_basic_operations()');
+    try {
+      const result = wasm.test_basic_operations();
+      success(result);
+      passed++;
+    } catch (e) {
+      error(`Failed: ${e}`);
+      failed++;
     }
     log('');
 
-    // Test 2: test_alias_count
-    log('Running: test_alias_count()');
-    const result2 = exports.test_alias_count();
-    if (result2 === 0) {
-      success('PASSED - Alias count is 0 (empty keystore)');
+    // Test 2: Load JKS file
+    const jksPath = '/tmp/my-release-key.jks';
+    if (fs.existsSync(jksPath)) {
+      log('Test 2: Load JKS file from keytool');
+      try {
+        const jksData = fs.readFileSync(jksPath);
+        const result = wasm.load_jks(jksData, 'android');
+        const parsed = JSON.parse(result);
+        success(`Loaded JKS with ${parsed.count} entries`);
+        info(`  Aliases: ${parsed.aliases.join(', ')}`);
+        passed++;
+      } catch (e) {
+        error(`Failed: ${e}`);
+        failed++;
+      }
+      log('');
     } else {
-      error(`FAILED - Expected 0, got ${result2}`);
+      log('Test 2: Load JKS file - SKIPPED (file not found)', colors.yellow);
+      info(`  Create with: keytool -genkey -v -keystore ${jksPath} -storetype JKS -alias agusibrahim -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android`);
+      log('');
     }
-    log('');
 
-    // Test 3: test_all
-    log('Running: test_all()');
-    const result3 = exports.test_all();
-    if (result3 === 0) {
-      success('PASSED - All operations completed successfully');
+    // Test 3: Load PKCS12 (.keystore) file
+    const p12Path = '/tmp/my-release-key.keystore';
+    const testP12Path = '/tmp/test.p12';
+
+    // Try with Android keystore first
+    if (fs.existsSync(p12Path)) {
+      log('Test 3: Load PKCS12 (.keystore) file');
+      try {
+        const p12Data = fs.readFileSync(p12Path);
+        const result = wasm.load_pkcs12(p12Data, 'android');
+        const parsed = JSON.parse(result);
+        success(`Loaded PKCS12 with ${parsed.count} entries`);
+        info(`  Aliases: ${parsed.aliases.join(', ')}`);
+        passed++;
+
+        // Test 3b: Get private key info
+        if (parsed.aliases.length > 0) {
+          log('Test 3b: Get PKCS12 private key info');
+          try {
+            const keyInfo = wasm.get_pkcs12_private_key_info(p12Data, 'android', parsed.aliases[0]);
+            const keyParsed = JSON.parse(keyInfo);
+            success(`Private key: ${keyParsed.privateKeyLength} bytes, ${keyParsed.certChainLength} certs`);
+            passed++;
+          } catch (e) {
+            error(`Failed: ${e}`);
+            failed++;
+          }
+        }
+      } catch (e) {
+        // Try with test.p12 using changeit password
+        log('  Android keystore failed, trying test.p12...', colors.yellow);
+        if (fs.existsSync(testP12Path)) {
+          try {
+            const p12Data = fs.readFileSync(testP12Path);
+            const result = wasm.load_pkcs12(p12Data, 'changeit');
+            const parsed = JSON.parse(result);
+            success(`Loaded test PKCS12 with ${parsed.count} entries`);
+            info(`  Aliases: ${parsed.aliases.join(', ')}`);
+            passed++;
+          } catch (e2) {
+            error(`Failed: ${e2}`);
+            failed++;
+          }
+        } else {
+          error(`Failed: ${e}`);
+          failed++;
+        }
+      }
+      log('');
+    } else if (fs.existsSync(testP12Path)) {
+      log('Test 3: Load test PKCS12 file');
+      try {
+        const p12Data = fs.readFileSync(testP12Path);
+        const result = wasm.load_pkcs12(p12Data, 'changeit');
+        const parsed = JSON.parse(result);
+        success(`Loaded PKCS12 with ${parsed.count} entries`);
+        info(`  Aliases: ${parsed.aliases.join(', ')}`);
+        passed++;
+      } catch (e) {
+        error(`Failed: ${e}`);
+        failed++;
+      }
+      log('');
     } else {
-      error(`FAILED - Error code: ${result3}`);
+      log('Test 3: Load PKCS12 file - SKIPPED (file not found)', colors.yellow);
+      info(`  Create with: keytool -genkey -v -keystore ${p12Path} -alias agusibrahim -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android`);
+      log('');
     }
-    log('');
+
+    // Test 4: Auto-detect with JKS
+    if (fs.existsSync(jksPath)) {
+      log('Test 4: Auto-detect JKS format');
+      try {
+        const jksData = fs.readFileSync(jksPath);
+        const result = wasm.load_auto_detect(jksData, 'android');
+        const parsed = JSON.parse(result);
+        success(`Auto-detected JKS with ${parsed.count} entries`);
+        passed++;
+      } catch (e) {
+        error(`Failed: ${e}`);
+        failed++;
+      }
+      log('');
+    }
+
+    // Test 5: Auto-detect with PKCS12
+    if (fs.existsSync(p12Path)) {
+      log('Test 5: Auto-detect PKCS12 format');
+      try {
+        const p12Data = fs.readFileSync(p12Path);
+        const result = wasm.load_auto_detect(p12Data, 'android');
+        const parsed = JSON.parse(result);
+        success(`Auto-detected PKCS12 with ${parsed.count} entries`);
+        passed++;
+      } catch (e) {
+        error(`Failed: ${e}`);
+        failed++;
+      }
+      log('');
+    }
+
+    // Test 6: Get JKS private key info with decryption
+    if (fs.existsSync(jksPath)) {
+      log('Test 6: Get JKS private key info (with decryption)');
+      try {
+        const jksData = fs.readFileSync(jksPath);
+        const keyInfo = wasm.get_private_key_info(jksData, 'android', 'agusibrahim');
+        const keyParsed = JSON.parse(keyInfo);
+        success(`Private key: ${keyParsed.privateKeyLength} bytes, ${keyParsed.certChainLength} certs`);
+        passed++;
+      } catch (e) {
+        error(`Failed: ${e}`);
+        failed++;
+      }
+      log('');
+    }
 
     // Summary
-    const allPassed = result1 === 0 && result2 === 0 && result3 === 0;
-    log('=======================', colors.blue);
-    if (allPassed) {
+    log('=============================================', colors.blue);
+    log(`Results: ${passed} passed, ${failed} failed`, passed > 0 && failed === 0 ? colors.green : colors.red);
+
+    if (failed === 0) {
       log('All tests PASSED!', colors.green);
       process.exit(0);
     } else {

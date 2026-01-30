@@ -40,7 +40,7 @@ pub mod decoder;
 pub mod encoder;
 pub mod keyprotector;
 
-#[cfg(feature = "openssl")]
+#[cfg(feature = "pkcs12")]
 pub mod pkcs12;
 
 pub use common::{
@@ -254,15 +254,15 @@ impl KeyStore {
         }
 
         // Check for PKCS12 format (ASN.1 SEQUENCE tag = 0x30)
-        #[cfg(feature = "openssl")]
+        #[cfg(feature = "pkcs12")]
         if buffer[0] == 0x30 {
             return self.load_pkcs12(buffer.as_slice(), password);
         }
 
-        #[cfg(not(feature = "openssl"))]
+        #[cfg(not(feature = "pkcs12"))]
         if buffer[0] == 0x30 {
             return Err(KeyStoreError::Other(
-                "PKCS12 format detected but feature not enabled. Use: cargo build --features openssl".to_string(),
+                "PKCS12 format detected but feature not enabled. Use: cargo build --features pkcs12".to_string(),
             ));
         }
 

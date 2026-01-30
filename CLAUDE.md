@@ -71,16 +71,16 @@ cargo publish
 | `encoder.rs` | Binary encoding for writing JKS files (big-endian, SHA-1 digest) |
 | `decoder.rs` | Binary decoding for reading JKS files |
 | `keyprotector.rs` | Password-based encryption/decryption of private keys (XOR + SHA-1) |
-| `pkcs12.rs` | PKCS12 format support via OpenSSL (Android `.keystore`, `.p12`, `.pfx` files) |
+| `pkcs12.rs` | PKCS12 format support via pure Rust p12-keystore (Android `.keystore`, `.p12`, `.pfx` files) |
 
 ### Feature Flags
 
 | Feature | Description |
 |---------|-------------|
-| `default` | Includes `rand` and `openssl` |
+| `default` | Includes `rand` and `pkcs12` |
 | `rand` | Enable random number generation for JKS encryption |
-| `openssl` | Enable PKCS12 support (for Android keystores) |
-| `wasm` | Build for WebAssembly (without `rand` or `openssl`) |
+| `pkcs12` | Enable PKCS12 support using pure Rust p12-keystore library |
+| `wasm` | Build for WebAssembly (without `rand` or `pkcs12`) |
 
 ### Key Types
 
@@ -100,10 +100,11 @@ Use `load_auto_detect()` to automatically detect and load either format.
 
 ### PKCS12 Notes
 
-- PKCS12 files (Android `.keystore`, `.p12`, `.pfx`) are loaded via OpenSSL
+- PKCS12 files (Android `.keystore`, `.p12`, `.pfx`) are loaded via pure Rust p12-keystore library (no OpenSSL dependency)
 - Private keys from PKCS12 are already decrypted after parsing
 - Use `get_raw_private_key_entry()` for PKCS12 (not `get_private_key_entry()`)
-- Alias is extracted from PKCS12 `friendlyName` attribute, falling back to certificate CN
+- Alias is extracted from PKCS12 `friendlyName` attribute, falling back to certificate subject
+- Supported encryption schemes: PBES1 (3DES, RC2) and PBES2 (AES-256)
 
 ### JKS Format Details
 
