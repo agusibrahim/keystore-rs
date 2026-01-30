@@ -8,7 +8,7 @@
 //! ## Example
 //!
 //! ```no_run
-//! use keystore_rs::{KeyStore, PrivateKeyEntry, Certificate};
+//! use jks::{KeyStore, PrivateKeyEntry, Certificate};
 //! use std::time::SystemTime;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {

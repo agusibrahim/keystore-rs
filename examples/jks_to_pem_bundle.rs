@@ -32,7 +32,6 @@ use jks::KeyStore;
 use std::env;
 use std::fs::File;
 use std::io::Write;
-use std::path::PathBuf;
 use std::process;
 
 fn read_keystore(path: &str, password: &[u8]) -> Result<KeyStore, Box<dyn std::error::Error>> {

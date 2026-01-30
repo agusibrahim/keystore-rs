@@ -3,13 +3,9 @@
 
 //! Key protection (encryption/decryption) for private keys
 
-use crate::common::{password_bytes, SALT_LEN};
+use crate::common::SALT_LEN;
 use crate::{KeyStoreError, Result};
 use sha1::{Digest, Sha1};
-
-/// OID for supported private key encryption algorithm
-/// 1.3.6.1.4.1.42.2.17.1.1 - Oracle's proprietary key encryption
-const SUPPORTED_KEY_ALGORITHM_OID: &[u64] = &[1, 3, 6, 1, 4, 1, 42, 2, 17, 1, 1];
 
 /// Decrypt a private key using password-based encryption
 pub fn decrypt(
@@ -65,7 +61,7 @@ pub fn decrypt(
     if pos < algo_end && data[pos] == 0x05 {
         pos += 1;
         if data[pos] == 0x00 {
-            pos += 1;
+            let _ = pos + 1; // Skip NULL byte value (pos is reset below)
         }
     }
 
@@ -82,7 +78,7 @@ pub fn decrypt(
     pos += bytes_read;
 
     let key_data = &data[pos..pos + octet_len];
-    pos += octet_len;
+    let _ = pos + octet_len; // Position not used after this point
 
     if key_data.len() < SALT_LEN + Sha1::output_size() {
         return Err(KeyStoreError::Other(
@@ -277,7 +273,7 @@ fn encode_asn1_private_key_info(encrypted_data: &[u8]) -> Result<Vec<u8>> {
 #[cfg(all(test, feature = "rand"))]
 mod tests {
     use super::*;
-    use crate::common::FixedRandom;
+    use crate::common::{password_bytes, FixedRandom};
 
     #[test]
     fn test_read_der_length_short_form() {

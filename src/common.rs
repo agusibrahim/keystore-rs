@@ -177,7 +177,7 @@ impl PrivateKeyEntry {
         if self.private_key.is_empty() {
             return Err(KeyStoreError::EmptyPrivateKey);
         }
-        for (i, cert) in self.certificate_chain.iter().enumerate() {
+        for cert in self.certificate_chain.iter() {
             cert.validate()?;
         }
         Ok(())

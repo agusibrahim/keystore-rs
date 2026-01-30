@@ -10,10 +10,11 @@
 //! cargo build --target wasm32-unknown-unknown --example wasm-test
 //! ```
 
-use jks::{Certificate, KeyStore, PrivateKeyEntry, TrustedCertificateEntry};
+use jks::{Certificate, KeyStore, TrustedCertificateEntry};
 use std::time::SystemTime;
 
 // Custom RNG for WASM (would use browser crypto in real usage)
+#[allow(dead_code)]
 struct WasmRng;
 
 impl jks::common::RandomReader for WasmRng {
