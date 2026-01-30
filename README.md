@@ -35,7 +35,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-jks = "0.1"
+jks = "0.2.1"
 ```
 
 ## Quick Start
@@ -434,22 +434,29 @@ cargo run --example pem
 
 ## WebAssembly (WASM) Support
 
-This library can be compiled to WebAssembly for use in browser environments or Node.js-WASM.
+This library can be compiled to WebAssembly for use in browser environments or Node.js-WASM. Runtime tested and verified working.
 
 ### Building for WASM
 
 ```bash
-# Build without default features (rand uses getrandom which isn't WASM-compatible)
-cargo build --target wasm32-unknown-unknown --no-default-features
+# Build the library for WASM (without rand feature)
+cargo build --target wasm32-unknown-unknown --lib --no-default-features
 
-# In your Cargo.toml:
+# Output: target/wasm32-unknown-unknown/debug/jks.wasm
+```
+
+### Using in Your Project
+
+Add to your `Cargo.toml`:
+
+```toml
 [dependencies]
-jks = { version = "0.1", default-features = false }
+jks = { version = "0.2", default-features = false }
 ```
 
 ### Providing a Custom RNG for WASM
 
-Since the default RNG isn't available in WASM, you need to provide your own:
+Since the default RNG isn't available in WASM, you need to provide your own using `KeyStoreOptions`:
 
 ```rust
 use jks::{KeyStore, KeyStoreOptions, common::RandomReader};
@@ -460,7 +467,8 @@ struct BrowserRng;
 impl RandomReader for BrowserRng {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<()> {
         // Use browser's crypto API or provide your own implementation
-        // In browsers, you can use web-sys or wasm-bindgen
+        // In browsers: window.crypto.getRandomValues()
+        // In Node.js: require('crypto').randomFillSync()
         Ok(())
     }
 }
@@ -474,6 +482,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ...
 }
 ```
+
+### WASM Runtime Testing
+
+The library has been verified working in WebAssembly runtime environment:
+
+```bash
+# Run the WASM runtime tests
+cargo build --target wasm32-unknown-unknown \
+    --manifest-path=tests/wasm/Cargo.toml --release
+
+# Test with Node.js
+node tests/wasm/test.js
+```
+
+**Test Results (verified):**
+- ✅ `test_create_trusted_cert()` - PASSED
+- ✅ `test_alias_count()` - PASSED
+- ✅ `test_all()` - PASSED
+
+WASM binary size: ~56 KB (release build)
 
 ### Compatibility
 

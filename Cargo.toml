@@ -1,6 +1,6 @@
 [package]
 name = "jks"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["agusibrahim <hi@agusibrahim.com>"]
 description = "Java KeyStore (JKS) encoder/decoder for Rust"
@@ -13,16 +13,18 @@ categories = ["cryptography"]
 [lib]
 name = "jks"
 path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 sha1 = "0.10"
 asn1-rs = "0.5"
 thiserror = "1.0"
 rand = { version = "0.8", optional = true }
+getrandom = { version = "0.2", optional = true }
 
 [features]
 default = ["rand"]
-wasm = []
+wasm = ["getrandom/js"]
 
 [dev-dependencies]
 rsa = "0.9"
@@ -55,3 +57,8 @@ path = "examples/jks_to_pem.rs"
 [[example]]
 name = "jks_to_pem_bundle"
 path = "examples/jks_to_pem_bundle.rs"
+
+[[example]]
+name = "wasm-test"
+path = "examples/wasm-test.rs"
+crate-type = ["cdylib", "rlib"]
